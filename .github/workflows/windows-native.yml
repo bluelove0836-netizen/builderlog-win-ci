@@ -83,6 +83,7 @@ jobs:
           schtasks /Query /TN "Builderlog Update"
           if ($LASTEXITCODE -ne 0) { throw 'task not created' }
           python $get schedule off
-          schtasks /Query /TN "Builderlog Update" 2>$null
+          cmd /c 'schtasks /Query /TN "Builderlog Update" >nul 2>&1'
           if ($LASTEXITCODE -eq 0) { throw 'task not deleted' }
+          Write-Output 'task deleted (OK)'
           exit 0
