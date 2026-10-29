@@ -10,20 +10,14 @@
   if ($lang -ne 'en' -and $lang -ne 'ko') { $lang = '{{LANG}}' }
   if ($lang -eq 'en' -or $lang -eq 'ko') { $sh = $sh -replace '\| bash$', "| BUILDERLOG_LANG=$lang bash" }
   $en = $lang -eq 'en'
-  if ($en) {
-    Write-Host 'Builderlog setup (Windows): here is the plan'
-    Write-Host '  1. Check that WSL (Ubuntu) is installed (if not, you only get the steps to install it)'
-    Write-Host "  2. If it is, run this inside Ubuntu: $sh"
-    Write-Host '     (it shows the plan again and asks before going on; Windows settings are not changed)'
-  } else {
-    Write-Host '빌더로그 설치(Windows) — 이렇게 해요:'
-    Write-Host '  1. WSL(우분투)이 있는지 확인해요(없으면 설치 방법만 알려 드려요)'
-    Write-Host "  2. 있으면 우분투 안에서 실행: $sh"
-    Write-Host '     (할 일을 다시 보여 주고 물어본 뒤 진행해요. Windows 설정은 바꾸지 않아요)'
-  }
   # 윈도우 그대로(WSL 없이) — 지금은 BUILDERLOG_NATIVE=1 일 때만(팩별 윈도우 실측이 끝나면 기본으로). 파이썬 3.10+ → %USERPROFILE%\builderlog\get.py → 마법사.
   # 파이썬이 없으면 winget 으로 이 사용자에게만(관리자 권한 없이) 설치한다. 스토어 바로가기 python.exe 는 버전 확인으로 걸러진다.
   if ("$env:BUILDERLOG_NATIVE" -eq '1') {
+    if ($en) {
+      Write-Host 'Builderlog setup (Windows, no WSL): Python 3.10+ (installed for this user if missing) -> helper in %USERPROFILE%\builderlog -> connect your AI tools.'
+    } else {
+      Write-Host '빌더로그 설치(Windows 그대로, WSL 없이): 파이썬 3.10+ (없으면 이 사용자에게만 설치) → 도우미 %USERPROFILE%\builderlog → AI 도구 연결.'
+    }
     $ok = { param($exe, $pre) try { (& $exe @pre -c "import sys;print(sys.version_info[:2]>=(3,10))" 2>$null) -eq 'True' } catch { $false } }
     $py = $null; $pre = @()
     if ((Get-Command py.exe -ErrorAction SilentlyContinue) -and (& $ok 'py.exe' @('-3'))) { $py = 'py.exe'; $pre = @('-3') }
@@ -56,6 +50,17 @@
     elseif ($ai -or [Console]::IsInputRedirected -or [Console]::IsOutputRedirected) { & $py @pre $get wizard --connect-only }
     else { & $py @pre $get wizard }
     return
+  }
+  if ($en) {
+    Write-Host 'Builderlog setup (Windows): here is the plan'
+    Write-Host '  1. Check that WSL (Ubuntu) is installed (if not, you only get the steps to install it)'
+    Write-Host "  2. If it is, run this inside Ubuntu: $sh"
+    Write-Host '     (it shows the plan again and asks before going on; Windows settings are not changed)'
+  } else {
+    Write-Host '빌더로그 설치(Windows) — 이렇게 해요:'
+    Write-Host '  1. WSL(우분투)이 있는지 확인해요(없으면 설치 방법만 알려 드려요)'
+    Write-Host "  2. 있으면 우분투 안에서 실행: $sh"
+    Write-Host '     (할 일을 다시 보여 주고 물어본 뒤 진행해요. Windows 설정은 바꾸지 않아요)'
   }
   # WSL 이 아예 없으면 wsl.exe 가 설치하라며 키를 기다릴 수 있어서, 등록된 배포판이 있을 때만(레지스트리는 읽기만) wsl -l -q 로 확인해요.
   # wsl -l -q 는 UTF-16 으로 나와서 NUL 을 지워요. docker-desktop 은 우분투가 아니라서 빼요.
