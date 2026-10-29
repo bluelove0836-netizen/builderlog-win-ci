@@ -1,0 +1,84 @@
+# 윈도우 그대로(WSL 없이) 시험. 서버는 러너 안 로컬(127.0.0.1)만 — 바깥 서버 호출 없음.
+name: windows-native
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  win:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      LOCAL: http://127.0.0.1:8765
+      BUILDERLOG_NO_BROWSER: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: get.py 단위 시험(진짜 msvcrt 잠금·schtasks·claude.cmd·UTF-8)
+        run: python tests/test_win_native.py
+
+      - name: 로컬 배포 흉내(주소 채운 get.py·install.ps1 을 127.0.0.1 로)
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force srv | Out-Null
+          foreach ($f in 'get.py','install.ps1','install.sh') {
+            $t = [IO.File]::ReadAllText("client/$f", [Text.Encoding]::UTF8).Replace('{{ORIGIN}}', $env:LOCAL).Replace('{{LANG}}', '')
+            [IO.File]::WriteAllText("srv/$f", $t, (New-Object Text.UTF8Encoding($false)))
+          }
+          Start-Process python -ArgumentList '-m','http.server','8765','--bind','127.0.0.1','--directory','srv' -WindowStyle Hidden
+          Start-Sleep 3
+          (Invoke-WebRequest -UseBasicParsing "$env:LOCAL/get.py").StatusCode
+
+      - name: install.ps1 윈도우 그대로 — Windows PowerShell 5.1, AI 가 실행한 것처럼(질문 없이 받기+연결)
+        shell: powershell
+        env:
+          BUILDERLOG_NATIVE: '1'
+          CLAUDECODE: '1'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          irm "$env:LOCAL/install.ps1" | iex
+          $get = Join-Path $env:USERPROFILE 'builderlog\get.py'
+          if (-not (Test-Path $get)) { throw 'get.py 없음' }
+          $env:BUILDERLOG_SERVER = $env:LOCAL
+          python $get status
+          if ($LASTEXITCODE -gt 4) { throw "status $LASTEXITCODE" }
+
+      - name: Git Bash(Claude Code 의 셸)로 같은 일 — ~ 경로·한글 출력 UTF-8
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p ~/builderlog-gb
+          curl -fsSL "$LOCAL/get.py" -o ~/builderlog-gb/get.py
+          BUILDERLOG_HOME=~/builderlog-gb python ~/builderlog-gb/get.py wizard --connect-only > out.txt 2>&1 || true
+          cat out.txt
+          python -c "t=open('out.txt','rb').read().decode('utf-8');assert any('\uac00'<=c<='\ud7a3' for c in t), t;assert 'C:/' in t, t"
+          BUILDERLOG_HOME=~/builderlog-gb python ~/builderlog-gb/get.py list > list.txt 2>&1 || true
+          python -c "open('list.txt','rb').read().decode('utf-8')"
+          cat list.txt
+
+      - name: npm 으로 깐 Claude Code(claude.cmd)에 빌더로그 MCP 연결
+        shell: powershell
+        run: |
+          npm i -g @anthropic-ai/claude-code@latest | Out-Null
+          (Get-Command claude).Source
+          $get = Join-Path $env:USERPROFILE 'builderlog\get.py'
+          python $get wizard --connect-only
+          claude mcp get builderlog
+          if ($LASTEXITCODE -ne 0) { throw 'claude mcp get builderlog 실패' }
+
+      - name: 하루 1번(작업 스케줄러) 켜고 끄기
+        shell: powershell
+        run: |
+          $get = Join-Path $env:USERPROFILE 'builderlog\get.py'
+          python $get schedule on --client none
+          schtasks /Query /TN "Builderlog Update"
+          if ($LASTEXITCODE -ne 0) { throw '작업 없음' }
+          python $get schedule off
+          schtasks /Query /TN "Builderlog Update" 2>$null
+          if ($LASTEXITCODE -eq 0) { throw '작업이 안 지워짐' }
+          exit 0
