@@ -38,7 +38,7 @@
       }
     }
     $root = if ($env:BUILDERLOG_HOME) { $env:BUILDERLOG_HOME } else { Join-Path $env:USERPROFILE 'builderlog' }
-    New-Item -ItemType Directory -Force -Path $root | Out-Null
+    [IO.Directory]::CreateDirectory($root) | Out-Null  # 내 빌더로그 폴더만(설정은 안 바꿈)
     if ($lang -eq 'en' -or $lang -eq 'ko') { Set-Content -Path (Join-Path $root 'lang') -Value $lang -Encoding ascii }
     $base = if ($env:BUILDERLOG_SERVER) { $env:BUILDERLOG_SERVER.TrimEnd('/') } else { '{{ORIGIN}}' }
     Invoke-WebRequest -UseBasicParsing -Uri "$base/get.py" -OutFile (Join-Path $root 'get.py.new')
